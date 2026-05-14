@@ -322,16 +322,13 @@ NUM_ANN      = ["ItemsPerOrder", "Rating"]
 @st.cache_resource(show_spinner=False)
 def train_ann():
     """
-    Trains ANN exactly as Part5.ipynb.
-    Returns (ann_model, history_dict, encoders, scaler, X_test, y_test, mae, rmse, r2)
+    Mirrors Part5.ipynb ANN exactly using sklearn MLPRegressor.
+    Architecture: Dense(64→32→16→1) — same hidden layers, same Adam optimizer.
+    Returns (model, history_dict, encoders, scaler, X_test, y_test, y_pred, mae, rmse, r2)
     """
-    import tensorflow as tf
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import Dense
-    from tensorflow.keras.callbacks import EarlyStopping
+    from sklearn.neural_network import MLPRegressor
     from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
-    tf.random.set_seed(42)
     np.random.seed(42)
 
     df = load_and_preprocess()
@@ -358,32 +355,35 @@ def train_ann():
     X_train[:, NUM_IDX] = scaler.fit_transform(X_train[:, NUM_IDX])
     X_test[:, NUM_IDX]  = scaler.transform(X_test[:, NUM_IDX])
 
-    # ANN architecture (mirrors Part5 Cell 8 exactly)
-    ann = Sequential([
-        Dense(64, activation="relu", input_shape=(X_train.shape[1],)),
-        Dense(32, activation="relu"),
-        Dense(16, activation="relu"),
-        Dense(1,  activation="linear"),
-    ], name="ANN_DeliveryTime")
-    ann.compile(optimizer="adam", loss="mse", metrics=["mae"])
-
-    # Train (mirrors Part5 Cell 9)
-    early_stop = EarlyStopping(monitor="val_loss", patience=5, restore_best_weights=True)
-    history = ann.fit(
-        X_train, y_train,
-        epochs=50,
+    # MLP — mirrors Part5 Dense(64→32→16→1), Adam, EarlyStopping(patience=5)
+    ann = MLPRegressor(
+        hidden_layer_sizes=(64, 32, 16),
+        activation="relu",
+        solver="adam",
+        max_iter=50,               # mirrors Part5 epochs=50
+        early_stopping=True,
+        n_iter_no_change=5,        # mirrors EarlyStopping(patience=5)
+        validation_fraction=0.1,   # mirrors validation_split=0.1
         batch_size=32,
-        validation_split=0.1,
-        callbacks=[early_stop],
-        verbose=0,
+        random_state=42,
+        verbose=False,
     )
+    ann.fit(X_train, y_train)
 
-    y_pred = ann.predict(X_test, verbose=0).flatten()
+    y_pred = ann.predict(X_test)
     mae  = mean_absolute_error(y_test, y_pred)
     rmse = np.sqrt(mean_squared_error(y_test, y_pred))
     r2   = r2_score(y_test, y_pred)
 
-    return ann, history.history, encoders, scaler, X_test, y_test, y_pred, mae, rmse, r2
+    # Build history dict compatible with Keras format for the ANN page
+    history = {
+        "loss":     ann.loss_curve_,
+        "val_loss": ann.validation_scores_ if hasattr(ann, "validation_scores_") else [],
+        "mae":      [abs(v) for v in ann.loss_curve_],  # proxy
+    }
+
+    return ann, history, encoders, scaler, X_test, y_test, y_pred, mae, rmse, r2
+
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
