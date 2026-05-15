@@ -174,7 +174,7 @@ with tab4:
 
             row = np.array([[items, rating, city_enc, cuisine_enc, payment_enc]], dtype=float)
             row[:, NUM_IDX] = scaler.transform(row[:, NUM_IDX])
-            pred_time = ann.predict(row, verbose=0)[0][0]
+            pred_time = ann.predict(row)[0]
 
             st.markdown(f"""
             <div style="background:rgba(255,255,255,.05);border-radius:16px;
